@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coxswain Calls</title>
+<style>
+  :root {
+    --bg: #0f141a;
+    --panel: #18202a;
+    --panel-2: #1f2934;
+    --line: #2c3a48;
+    --text: #e8eef4;
+    --muted: #9aabbb;
+    --accent: #6cc4ff;
+    --good: #5fd38d;
+    --bad: #ff7a7a;
+    --gold: #ffd166;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.45;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+  }
+  .wrap { width: 100%; max-width: 640px; padding: 20px 16px 40px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  h1 { font-size: 1.35rem; margin: 0; letter-spacing: .02em; }
+  h1 span { color: var(--accent); }
+  .tabs { display: flex; gap: 6px; }
+  button {
+    font: inherit; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tabs button.on { background: var(--accent); color: #0b1218; border-color: var(--accent); font-weight: 600; }
+
+  .scores { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; text-align: center; }
+  .stat b { display: block; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+  .stat small { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; }
+  .stat.hi b { color: var(--gold); }
+  .bump { animation: bump .35s ease; }
+  @keyframes bump { 50% { transform: scale(1.25); } }
+
+  .cats { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .cats button { font-size: .8rem; padding: 5px 10px; border-radius: 999px; color: var(--muted); }
+  .cats button.on { color: var(--text); border-color: var(--accent); background: #1d3346; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+  .art { display: flex; justify-content: center; margin-bottom: 8px; }
+  .art svg { width: 100%; max-width: 300px; height: auto; }
+  .tag { color: var(--accent); font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; }
+  .prompt-label { color: var(--muted); font-size: .9rem; margin: 6px 0 2px; }
+  .prompt { font-size: 1.25rem; font-weight: 600; margin: 0 0 14px; }
+  .prompt.cmd { font-size: 1.5rem; color: var(--accent); }
+
+  .choices { display: grid; gap: 8px; }
+  .choices button { text-align: left; padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start; }
+  .choices button .k { color: var(--muted); font-size: .8rem; min-width: 1.2em; padding-top: 2px; }
+  .choices button.right { border-color: var(--good); background: #173226; }
+  .choices button.wrong { border-color: var(--bad); background: #3a1d22; }
+  .choices button:disabled { cursor: default; }
+
+  .feedback { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--panel-2); border-left: 4px solid var(--line); display: none; }
+  .feedback.show { display: block; }
+  .feedback.good { border-left-color: var(--good); }
+  .feedback.bad { border-left-color: var(--bad); }
+  .feedback h3 { margin: 0 0 4px; font-size: 1rem; }
+  .feedback p { margin: 4px 0 0; color: var(--muted); }
+  .feedback p strong { color: var(--text); }
+  .next { margin-top: 12px; width: 100%; background: var(--accent); color: #0b1218; border-color: var(--accent); font-weight: 600; padding: 12px; }
+
+  /* Study mode */
+  .flip { cursor: pointer; min-height: 300px; display: flex; flex-direction: column; justify-content: center; text-align: center; user-select: none; }
+  .flip .hint { color: var(--muted); font-size: .8rem; margin-top: 16px; }
+  .flip .back-text { font-size: 1.1rem; }
+  .flip .tip { color: var(--muted); margin-top: 10px; font-size: .95rem; }
+  .study-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; gap: 8px; }
+  .study-nav span { color: var(--muted); font-size: .9rem; }
+
+  footer { margin-top: 18px; color: var(--muted); font-size: .8rem; text-align: center; }
+  footer button { font-size: .75rem; padding: 4px 10px; margin-left: 6px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Coxswain <span>Calls</span></h1>
+    <div class="tabs" role="tablist">
+      <button id="tab-play" class="on" role="tab">Play</button>
+      <button id="tab-study" role="tab">Study</button>
+    </div>
+  </header>
+
+  <div class="cats" id="cats"></div>
+
+  <!-- PLAY -->
+  <section id="play">
+    <div class="scores">
+      <div class="stat"><b id="streak">0</b><small>Streak</small></div>
+      <div class="stat"><b id="score">0</b><small>Score</small></div>
+      <div class="stat hi"><b id="high">0</b><small>High Score</small></div>
+    </div>
+    <div class="card">
+      <div class="art" id="q-art"></div>
+      <div class="tag" id="q-tag"></div>
+      <div class="prompt-label" id="q-label"></div>
+      <p class="prompt" id="q-prompt"></p>
+      <div class="choices" id="choices"></div>
+      <div class="feedback" id="feedback">
+        <h3 id="fb-title"></h3>
+        <p id="fb-body"></p>
+        <p id="fb-tip"></p>
+        <button class="next" id="next">Next card →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STUDY -->
+  <section id="study" class="hidden">
+    <div class="card flip" id="flip" tabindex="0" role="button" aria-label="Flip card">
+      <div class="art" id="s-art"></div>
+      <div class="tag" id="s-tag"></div>
+      <div id="s-front"><p class="prompt cmd" id="s-cmd"></p></div>
+      <div id="s-back" class="hidden">
+        <p class="prompt cmd" id="s-cmd2"></p>
+        <div class="back-text" id="s-when"></div>
+        <div class="tip" id="s-tip"></div>
+      </div>
+      <div class="hint" id="s-hint">Tap to flip</div>
+    </div>
+    <div class="study-nav">
+      <button id="s-prev">← Prev</button>
+      <span id="s-count"></span>
+      <button id="s-next">Next →</button>
+    </div>
+  </section>
+
+  <footer>
+    Best streak: <b id="best-streak">0</b>
+    <button id="reset">Reset high score</button>
+  </footer>
+</div>
+
+<script>
+/* ---------- Simple line illustrations (light strokes on dark) ---------- */
+const S = 'stroke="currentColor" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"';
+const person = (x, y, armsUp) => `
+  <circle cx="${x}" cy="${y}" r="6" ${S}/>
+  <path d="M${x} ${y+6} v26 M${x} ${y+32} l-8 22 M${x} ${y+32} l8 22" ${S}/>
+  ${armsUp ? `<path d="M${x} ${y+12} l-8 -20 M${x} ${y+12} l8 -20" ${S}/>`
+           : `<path d="M${x} ${y+14} l-10 12 M${x} ${y+14} l10 12" ${S}/>`}`;
+const water = (y) => `<path d="M10 ${y} q15 -6 30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0" stroke="#6cc4ff" fill="none" stroke-width="2.5" stroke-linecap="round" opacity=".7"/>`;
+const hull = (y) => `<path d="M20 ${y} Q150 ${y+22} 280 ${y}" ${S}/><path d="M20 ${y} L280 ${y}" ${S} opacity=".6"/>`;
+
+const ART = {
+  carry: `<svg viewBox="0 0 300 130" color="#e8eef4">
+    <path d="M15 30 Q150 8 285 30" ${S}/><path d="M15 30 L285 30" ${S} opacity=".6"/>
+    ${person(70, 48, true)}${person(150, 48, true)}${person(230, 48, true)}
+    <path d="M10 124 H290" ${S} opacity=".4"/></svg>`,
+  dock: `<svg viewBox="0 0 300 130" color="#e8eef4">
+    <rect x="10" y="70" width="110" height="14" rx="2" ${S}/>
+    <path d="M30 84 v30 M100 84 v30" ${S} opacity=".6"/>
+    ${person(70, 14, false)}
+    <path d="M130 74 Q210 90 290 74 L130 74" ${S}/>
+    ${water(100)}${water(116)}</svg>`,
+  row: `<svg viewBox="0 0 300 130" color="#e8eef4">
+    ${hull(60)}
+    <path d="M80 62 L50 110 M140 62 L110 110 M200 62 L170 110" ${S}/>
+    <path d="M44 106 l12 8 M104 106 l12 8 M164 106 l12 8" stroke="#6cc4ff" stroke-width="6" stroke-linecap="round"/>
+    <path d="M250 40 l20 0 m-6 -6 l6 6 -6 6" ${S} opacity=".7"/>
+    ${water(96)}${water(118)}</svg>`,
+  stop: `<svg viewBox="0 0 300 130" color="#e8eef4">
+    ${hull(60)}
+    <path d="M110 62 L110 112 M190 62 L190 112" ${S}/>
+    <rect x="102" y="100" width="16" height="22" rx="3" fill="#6cc4ff" opacity=".85"/>
+    <rect x="182" y="100" width="16" height="22" rx="3" fill="#6cc4ff" opacity=".85"/>
+    <circle cx="255" cy="30" r="16" stroke="#ff7a7a" stroke-width="3" fill="none"/>
+    <path d="M245 30 h20" stroke="#ff7a7a" stroke-width="3" stroke-linecap="round"/>
+    ${water(108)}</svg>`,
+  power: `<svg viewBox="0 0 300 130" color="#e8eef4">
+    ${hull(66)}
+    <path d="M90 68 L60 112 M160 68 L130 112" ${S}/>
+    <path d="M200 20 l-14 30 h14 l-10 30 30 -40 h-14 l12 -20 z" stroke="#ffd166" stroke-width="3" fill="none" stroke-linejoin="round"/>
+    <path d="M30 40 h40 M20 52 h50" ${S} opacity=".5"/>
+    ${water(102)}${water(120)}</svg>`,
+  steer: `<svg viewBox="0 0 300 130" color="#e8eef4">
+    <path d="M20 90 Q120 110 230 90" ${S}/>
+    <path d="M230 90 L260 120" ${S}/>
+    <path d="M150 20 a40 40 0 0 1 60 40" stroke="#6cc4ff" stroke-width="3" fill="none" stroke-linecap="round" stroke-dasharray="6 6"/>
+    <path d="M200 60 l10 0 0 -10" stroke="#6cc4ff" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <circle cx="225" cy="70" r="6" ${S}/><path d="M225 76 v12" ${S}/>
+    ${water(118)}</svg>`,
+  compass: `<svg viewBox="0 0 300 130" color="#e8eef4">
+    <path d="M150 12 Q178 65 150 118 Q122 65 150 12 Z" ${S}/>
+    <text x="150" y="30" fill="#9aabbb" font-size="11" text-anchor="middle">BOW</text>
+    <text x="150" y="112" fill="#9aabbb" font-size="11" text-anchor="middle">STERN</text>
+    <text x="80" y="70" fill="#ff7a7a" font-size="14" text-anchor="middle" font-weight="700">PORT</text>
+    <text x="225" y="70" fill="#5fd38d" font-size="14" text-anchor="middle" font-weight="700">STARBOARD</text>
+    <path d="M118 65 h-14 M182 65 h14" ${S} opacity=".6"/></svg>`,
+};
+
+/* ---------- Card deck ----------
+   cmd  = the call / answer
+   when = when you use it / what it means
+   tip  = extra coaching note shown after answering            */
+const CATS = {
+  land:   'Land & Carrying',
+  dock:   'Launch & Dock',
+  water:  'On the Water',
+  race:   'Race & Rate Calls',
+  steer:  'Steering & Safety',
+};
+const DECK = [
+  // Land & carrying
+  { c:'land', art:'carry', cmd:'Hands on', when:'Before moving the boat: everyone grabs the boat and gets ready to lift.', tip:'Wait until every rower has hands on before the next call.' },
+  { c:'land', art:'carry', cmd:'Up to waists', when:'Lift the boat off the rack or slings to waist height.', tip:'Call it with a clear count: "Up to waists — ready, UP."' },
+  { c:'land', art:'carry', cmd:'Overheads', when:'Press the boat from waists or shoulders up over everyone\'s heads.', tip:'Often used before splitting to shoulders or walking through tight spots.' },
+  { c:'land', art:'carry', cmd:'Split to shoulders', when:'Lower the boat from overhead onto shoulders, rowers alternating sides.', tip:'Rowers go to the side opposite their rigger so the boat stays balanced.' },
+  { c:'land', art:'carry', cmd:'Weigh enough', when:'Stop whatever you are doing right now — walking with the boat, rowing, anything.', tip:'Also spelled "Way enough." It works on land and on the water.' },
+  { c:'land', art:'carry', cmd:'Watch the riggers / Watch the fin', when:'Walking near doors, racks or other boats where the riggers or fin could hit something.', tip:'You are the eyes of the boat — call hazards early.' },
+  // Launch & dock
+  { c:'dock', art:'dock', cmd:'Toes to the edge', when:'On the dock: walk until your toes are at the dock\'s edge before putting the boat in.', tip:'Make sure the fin and rudder will clear the dock.' },
+  { c:'dock', art:'dock', cmd:'Roll it in / Ready, in', when:'Lower the boat from overhead or waists into the water together.', tip:'Keep the fin clear of the dock edge as the boat goes in.' },
+  { c:'dock', art:'dock', cmd:'One foot in and down', when:'Getting in: one foot on the step in the boat, then sit down onto the seat.', tip:'Never step on the hull itself — only the step/footboard area.' },
+  { c:'dock', art:'dock', cmd:'Number off from bow when ready', when:'Check that all rowers are in, strapped in, and ready to go.', tip:'Rowers answer in order: "Bow!", "Two!", "Three!" ... up to stroke.' },
+  { c:'dock', art:'dock', cmd:'Hands on the dock — push off on three', when:'Shoving away from the dock to leave.', tip:'Dockside rowers push; everyone keeps oar handles held so blades don\'t scrape.' },
+  { c:'dock', art:'dock', cmd:'Lean away', when:'Rowers on the dock side shift weight away so their blades lift clear of the dock.', tip:'Useful when coming in and leaving the dock.' },
+  // On the water
+  { c:'water', art:'row', cmd:'Sit ready', when:'Get set at the ready (start) position, blades squared and buried, about to start rowing.', tip:'Wait until the boat is set and everyone is ready.' },
+  { c:'water', art:'row', cmd:'Ready all, row', when:'Start everyone rowing together.', tip:'Say it clearly and with energy — it sets the tone of the piece.' },
+  { c:'water', art:'stop', cmd:'Let it run', when:'Stop rowing and hold the blades off the water so the boat glides.', tip:'Great for drills and to check how well the boat is set.' },
+  { c:'water', art:'stop', cmd:'Sit easy', when:'Relax and rest, with blades flat on the water to steady the boat.', tip:'Use it for water breaks or while waiting.' },
+  { c:'water', art:'stop', cmd:'Hold water', when:'Square the blades in the water to slow down or stop the boat.', tip:'This is a controlled stop — not an emergency stop.' },
+  { c:'water', art:'stop', cmd:'Check it down / Hold hard', when:'EMERGENCY: stop the boat as fast as possible.', tip:'Blades squared and buried deep. Use it when there is danger ahead.' },
+  { c:'water', art:'row', cmd:'Back it down', when:'Row backwards (blades reversed) so the boat moves stern-first.', tip:'Handy for lining up at the start or backing away from something.' },
+  { c:'water', art:'row', cmd:'Set the boat', when:'The boat is leaning or rocking — rowers level their hands to balance it.', tip:'Even handle heights on both sides make the boat sit level.' },
+  { c:'water', art:'steer', cmd:'Port to row, starboard to back', when:'Spin the boat in place.', tip:'With port rowing and starboard backing, the bow turns toward starboard.' },
+  { c:'water', art:'row', cmd:'Bow pair only / Stern four, row', when:'Only the named rowers row while the rest sit out.', tip:'Used for drills, warm-ups and small adjustments of the boat.' },
+  { c:'water', art:'row', cmd:'Square blades', when:'Row without feathering — the blade stays square the whole stroke (a drill).', tip:'Builds balance and clean catches.' },
+  // Race & rate
+  { c:'race', art:'power', cmd:'Power ten', when:'Ten of the hardest, most focused strokes — often to make a move in a race.', tip:'Call it "in two" so rowers can prepare.' },
+  { c:'race', art:'power', cmd:'In two', when:'Warning that a change will happen two strokes from now.', tip:'Count it at the catch: "That\'s one... that\'s two... GO."' },
+  { c:'race', art:'power', cmd:'Up two in two', when:'Raise the stroke rate by two strokes per minute, starting in two strokes.', tip:'Stroke seat sets the new rate; everyone follows.' },
+  { c:'race', art:'power', cmd:'Light / Half / Full pressure', when:'Change how hard the rowers pull on each stroke.', tip:'Pressure is effort; rate is strokes per minute — they are different things.' },
+  { c:'race', art:'power', cmd:'Attention... Go!', when:'The official race start command.', tip:'Rowers are at the ready position and take the first stroke on "Go."' },
+  { c:'race', art:'power', cmd:'Stroke rate', when:'How many strokes the boat takes per minute.', tip:'Example: "Rating 32" means 32 strokes per minute.' },
+  { c:'race', art:'row', cmd:'Catch', when:'The moment the blade drops into the water at the start of the drive.', tip:'You can call rhythm on it: "Catch... catch..."' },
+  { c:'race', art:'row', cmd:'Release / Finish', when:'The moment the blade comes out of the water at the end of the drive.', tip:'Clean releases help the boat run.' },
+  // Steering & safety
+  { c:'steer', art:'compass', cmd:'Port', when:'The coxswain\'s LEFT side — the rowers\' RIGHT (rowers face the stern).', tip:'Trick: "port" and "left" both have four letters.' },
+  { c:'steer', art:'compass', cmd:'Starboard', when:'The coxswain\'s RIGHT side — the rowers\' LEFT.', tip:'Rowers sit facing backward, so their left is your right.' },
+  { c:'steer', art:'steer', cmd:'Pull the starboard (right) string/toggle', when:'You want the bow to turn to starboard (right).', tip:'Pull the side you want to turn toward.' },
+  { c:'steer', art:'steer', cmd:'Small, smooth rudder moves', when:'Steering normally — the boat is drifting a little off line.', tip:'Big rudder moves slow the boat and throw off the balance.' },
+  { c:'steer', art:'steer', cmd:'Pick a point', when:'Keeping the boat straight: aim at a fixed landmark far ahead.', tip:'A tree, building or buoy works. Check it every few strokes.' },
+  { c:'steer', art:'steer', cmd:'Follow the traffic pattern', when:'Sharing the river with other boats.', tip:'Usually you stay to the starboard side, but always learn your local pattern.' },
+  { c:'steer', art:'steer', cmd:'Starboard, hold water', when:'You need a tight turn toward starboard.', tip:'The dragging blades pull the bow that way. Add rudder to help.' },
+  { c:'steer', art:'dock', cmd:'Land slowly, into the current', when:'Coming in to the dock.', tip:'Approach at a gentle angle, let it run, and use "hold water" to control speed.' },
+  { c:'steer', art:'compass', cmd:'Bow seat / Stroke seat', when:'Seat 1 is bow (front); the stroke seat is closest to the coxswain and sets the rhythm.', tip:'In an 8+, seat 8 is stroke.' },
+];
+
+/* ---------- State ---------- */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('cox.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('cox.' + k, JSON.stringify(v)); } catch {} },
+};
+let active = new Set(store.get('cats', Object.keys(CATS)));
+let streak = 0, score = 0;
+let high = store.get('high', 0), bestStreak = store.get('bestStreak', 0);
+let current = null, lastId = null, answered = false;
+const missed = []; // cards answered wrong come back sooner
+
+const $ = (id) => document.getElementById(id);
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const pool = () => DECK.map((d, i) => ({ ...d, id: i })).filter(d => active.has(d.c));
+
+function bump(el) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+function renderScores() {
+  $('streak').textContent = streak;
+  $('score').textContent = score;
+  $('high').textContent = high;
+  $('best-streak').textContent = bestStreak;
+}
+
+/* ---------- Category chips ---------- */
+function renderCats() {
+  const el = $('cats'); el.innerHTML = '';
+  for (const [k, name] of Object.entries(CATS)) {
+    const b = document.createElement('button');
+    b.textContent = name; b.className = active.has(k) ? 'on' : '';
+    b.onclick = () => {
+      if (active.has(k) && active.size === 1) return; // keep at least one
+      active.has(k) ? active.delete(k) : active.add(k);
+      store.set('cats', [...active]);
+      renderCats(); newQuestion(); studyIdx = 0; renderStudy();
+    };
+    el.appendChild(b);
+  }
+}
+
+/* ---------- Play ---------- */
+function pickCard(p) {
+  const m = missed.findIndex(id => id !== lastId && p.some(c => c.id === id));
+  if (m >= 0 && Math.random() < 0.5) { const id = missed.splice(m, 1)[0]; return p.find(c => c.id === id); }
+  let c; do { c = p[Math.floor(Math.random() * p.length)]; } while (p.length > 1 && c.id === lastId);
+  return c;
+}
+
+function newQuestion() {
+  const p = pool();
+  const card = pickCard(p);
+  lastId = card.id; answered = false;
+  const showCmd = Math.random() < 0.5; // true: show command, pick meaning
+  const field = showCmd ? 'when' : 'cmd';
+  // distractors: prefer same category, then the rest of the deck
+  const all = DECK.map((d, i) => ({ ...d, id: i })).filter(d => d.id !== card.id && d[field] !== card[field]);
+  const same = shuffle(all.filter(d => d.c === card.c));
+  const other = shuffle(all.filter(d => d.c !== card.c));
+  const opts = shuffle([card, ...[...same, ...other].slice(0, 3)]);
+  current = { card, showCmd, field, opts };
+
+  $('q-art').innerHTML = ART[card.art];
+  $('q-tag').textContent = CATS[card.c];
+  $('q-label').textContent = showCmd ? 'What does this call mean / when do you use it?' : 'Which call or move fits this situation?';
+  const pr = $('q-prompt');
+  pr.textContent = showCmd ? `"${card.cmd}"` : card.when;
+  pr.className = 'prompt' + (showCmd ? ' cmd' : '');
+
+  const ch = $('choices'); ch.innerHTML = '';
+  opts.forEach((o, i) => {
+    const b = document.createElement('button');
+    b.innerHTML = `<span class="k">${i + 1}</span><span></span>`;
+    b.lastChild.textContent = o[field];
+    b.onclick = () => answer(i);
+    ch.appendChild(b);
+  });
+  $('feedback').className = 'feedback';
+}
+
+function answer(i) {
+  if (answered) return;
+  answered = true;
+  const { card, opts } = current;
+  const ok = opts[i].id === card.id;
+  const btns = $('choices').children;
+  [...btns].forEach((b, j) => {
+    b.disabled = true;
+    if (opts[j].id === card.id) b.classList.add('right');
+    else if (j === i) b.classList.add('wrong');
+  });
+  if (ok) {
+    streak += 1;
+    score += streak;           // progressive: 1, 2, 3, ... points per answer in a row
+    if (score > high) { high = score; store.set('high', high); bump($('high')); }
+    if (streak > bestStreak) { bestStreak = streak; store.set('bestStreak', bestStreak); }
+    bump($('streak')); bump($('score'));
+  } else {
+    streak = 0; score = 0;     // one miss resets everything to zero
+    if (!missed.includes(card.id)) missed.push(card.id);
+  }
+  renderScores();
+  const fb = $('feedback');
+  fb.className = 'feedback show ' + (ok ? 'good' : 'bad');
+  $('fb-title').textContent = ok
+    ? (streak >= 5 ? `🔥 ${streak} in a row! +${streak}` : `Correct! +${streak}`)
+    : 'Not quite — streak reset to 0';
+  $('fb-body').innerHTML = '';
+  const s = document.createElement('strong'); s.textContent = `"${card.cmd}"`;
+  $('fb-body').append(s, document.createTextNode(' — ' + card.when));
+  $('fb-tip').textContent = card.tip ? 'Tip: ' + card.tip : '';
+  $('next').focus({ preventScroll: true });
+}
+
+$('next').onclick = newQuestion;
+
+/* ---------- Study ---------- */
+let studyIdx = 0, flipped = false, studyOrder = [];
+function renderStudy() {
+  const p = pool();
+  if (studyOrder.length !== p.length || !studyOrder.every(id => p.some(c => c.id === id))) studyOrder = p.map(c => c.id);
+  studyIdx = (studyIdx + p.length) % p.length;
+  const card = DECK[studyOrder[studyIdx]];
+  flipped = false;
+  $('s-art').innerHTML = ART[card.art];
+  $('s-tag').textContent = CATS[card.c];
+  $('s-cmd').textContent = `"${card.cmd}"`;
+  $('s-cmd2').textContent = `"${card.cmd}"`;
+  $('s-when').textContent = card.when;
+  $('s-tip').textContent = card.tip ? 'Tip: ' + card.tip : '';
+  $('s-front').classList.remove('hidden');
+  $('s-back').classList.add('hidden');
+  $('s-hint').textContent = 'Tap to flip';
+  $('s-count').textContent = `${studyIdx + 1} / ${p.length}`;
+}
+function flip() {
+  flipped = !flipped;
+  $('s-front').classList.toggle('hidden', flipped);
+  $('s-back').classList.toggle('hidden', !flipped);
+  $('s-hint').textContent = flipped ? 'Tap to flip back' : 'Tap to flip';
+}
+$('flip').onclick = flip;
+$('s-prev').onclick = () => { studyIdx--; renderStudy(); };
+$('s-next').onclick = () => { studyIdx++; renderStudy(); };
+
+/* ---------- Tabs, keys, reset ---------- */
+let mode = 'play';
+function setMode(m) {
+  mode = m;
+  $('play').classList.toggle('hidden', m !== 'play');
+  $('study').classList.toggle('hidden', m !== 'study');
+  $('tab-play').classList.toggle('on', m === 'play');
+  $('tab-study').classList.toggle('on', m === 'study');
+  if (m === 'study') renderStudy();
+}
+$('tab-play').onclick = () => setMode('play');
+$('tab-study').onclick = () => setMode('study');
+
+document.addEventListener('keydown', (e) => {
+  if (mode === 'play') {
+    if (!answered && /^[1-4]$/.test(e.key)) answer(+e.key - 1);
+    else if (answered && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); newQuestion(); }
+  } else {
+    if (e.key === 'ArrowRight') { studyIdx++; renderStudy(); }
+    else if (e.key === 'ArrowLeft') { studyIdx--; renderStudy(); }
+    else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flip(); }
+  }
+});
+
+$('reset').onclick = () => {
+  if (!confirm('Reset the high score and best streak?')) return;
+  high = 0; bestStreak = 0; store.set('high', 0); store.set('bestStreak', 0); renderScores();
+};
+
+renderCats(); renderScores(); newQuestion();
+</script>
+</body>
+</html>
